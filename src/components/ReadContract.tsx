@@ -1,68 +1,86 @@
 'use client'
 
-import { useState } from 'react'
-import { BaseError } from 'viem'
-import { type Address, useContractRead } from 'wagmi'
+import * as PushAPI from '@pushprotocol/restapi';
+import { ethers } from 'ethers';
+import { useEffect } from 'react';
+import { BaseError } from 'viem';
+import { useAccount, useContractRead, useWalletClient } from 'wagmi';
 
-import { wagmiContractConfig } from './contracts'
+import { tokenPayMasterContractConfig } from './contracts';
 
 export function ReadContract() {
   return (
     <div>
       <div>
         <BalanceOf />
-        <br />
-        <TotalSupply />
       </div>
     </div>
   )
 }
 
-function TotalSupply() {
-  const { data, isRefetching, refetch } = useContractRead({
-    ...wagmiContractConfig,
-    functionName: 'totalSupply',
-  })
-
-  return (
-    <div>
-      Total Supply: {data?.toString()}
-      <button
-        disabled={isRefetching}
-        onClick={() => refetch()}
-        style={{ marginLeft: 4 }}
-      >
-        {isRefetching ? 'loading...' : 'refetch'}
-      </button>
-    </div>
-  )
-}
-
 function BalanceOf() {
-  const [address, setAddress] = useState<Address>(
-    '0xa5cc3c03994DB5b0d9A5eEdD10CabaB0813678AC',
-  )
-  const { data, error, isLoading, isSuccess } = useContractRead({
-    ...wagmiContractConfig,
-    functionName: 'balanceOf',
-    args: [address],
+  const { address } = useAccount()
+  const { data: signer } = useWalletClient()
+
+  const { data, error, isSuccess } = useContractRead({
+    ...tokenPayMasterContractConfig,
+    functionName: 'paymasterIdBalances',
+    args: [address!],
     enabled: Boolean(address),
   })
 
-  const [value, setValue] = useState<string>(address)
+  const env: any = 'staging'
+  let balance = '0'
+
+  if (data != undefined) {
+    balance = ethers.utils.formatEther(data!.toString())
+  }
+
+  useEffect(() => {
+    const init = async() => {
+      const channelData = await PushAPI.channels.getChannel({
+        channel: `eip155:5:0xef902bbE4967ac7A5Ec22039cA2d994325A36dB9`, 
+        env: env
+      });
+      console.log("channelData:", channelData)
+    }
+    init()
+  }, [])
+
+  useEffect(() => {
+    // send notificate
+    const sendNotificate = async() => {
+      const apiResponse = await PushAPI.payloads.sendNotification({
+        signer,
+        type: 3, 
+        identityType: 2, 
+        notification: {
+          title: `[FRKT] TokenPaymaster's balance is very low!!`,
+          body: `[FRKT] TokenPaymaster's balance is very low!! Please deposit!!`
+        },
+        payload: {
+          title: `[FRKT] TokenPaymaster's balance is very low!!`,
+          body: `[FRKT] TokenPaymaster's balance is very low!! Please deposit!!`,
+          cta: '',
+          img: ''
+        },
+        recipients: `eip155:5:${address}`, 
+        channel: 'eip155:5:0xef902bbE4967ac7A5Ec22039cA2d994325A36dB9', 
+        env: env
+      });
+      console.log('apiResponse:', apiResponse)
+    }
+
+    if(Number(balance) <= 0.005) {
+      sendNotificate()
+    }
+  }, [balance])
+
+  // TODO add send notification logic
 
   return (
     <div>
-      Token balance: {isSuccess && data?.toString()}
-      <input
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="wallet address"
-        style={{ marginLeft: 4 }}
-        value={value}
-      />
-      <button onClick={() => setAddress(value as Address)}>
-        {isLoading ? 'fetching...' : 'fetch'}
-      </button>
+      balance: {isSuccess && balance} ETH
       {error && <div>{(error as BaseError).shortMessage}</div>}
     </div>
   )

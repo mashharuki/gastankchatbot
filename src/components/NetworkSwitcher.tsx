@@ -1,6 +1,6 @@
 'use client'
 
-import { useNetwork, useSwitchNetwork } from 'wagmi'
+import { useNetwork, useSwitchNetwork } from 'wagmi';
 
 export function NetworkSwitcher() {
   const { chain } = useNetwork()
@@ -23,7 +23,7 @@ export function NetworkSwitcher() {
                 {x.name}
                 {isLoading && x.id === pendingChainId && ' (switching)'}
               </button>
-            ),
+            )
           )}
         </div>
       )}
